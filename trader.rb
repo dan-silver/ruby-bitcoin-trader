@@ -9,6 +9,9 @@ class Trader
     @db = DatabaseHandler.new
     @coinbase = Coinbase::Client.new ENV['COINBASE_API_KEY']
 
+    @coinbase_flat_fee = 0.15
+    @coinbase_percentage_fee = 0.01
+
     @min_percent_gain = min_percent_gain_for_sale
     @min_percent_drop = min_percent_drop_for_purchase
   end
@@ -51,11 +54,11 @@ class Trader
   def consider_purchase
     last_sale = @db.last_transaction "sale"
     buy_price = @coinbase.buy_price 1
-    one_btc_price = (buy_price.to_f - 0.15) / 1.01
+    one_btc_price = (buy_price.to_f - @coinbase_flat_fee) / @coinbase_percentage_fee
     #puts "buy price: $#{buy_price}"
     available_funds = last_sale[:price].to_f
 
-    btc_to_purchase = ((available_funds - 0.15) / 1.01) / one_btc_price
+    btc_to_purchase = ((available_funds - @coinbase_flat_fee) / @coinbase_percentage_fee) / one_btc_price
 
     last_sale_dollar_val = last_sale[:price].round 4
     puts "Last sale was #{last_sale[:quantity].round 4} BTC for $#{last_sale_dollar_val}".light_green
