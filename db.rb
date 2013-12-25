@@ -1,7 +1,7 @@
 require "sqlite3"
 
 class DatabaseHandler
-  def initialize (min_percent_gain = 0.05)
+  def initialize
     @db = SQLite3::Database.new "bitcoins.db"
     
     rows = @db.execute <<-SQL
