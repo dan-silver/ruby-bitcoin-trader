@@ -82,7 +82,7 @@ class Trader
     @coinbase.transactions.transactions.each do |t|
       type = t.transaction.recipient.email == "das2c3@mail.missouri.edu" ? :purchase : :sale
       cost = /\$(?<amount>\d+\.*\d*)/.match(t.transaction.notes)[:amount].to_f
-      @db.insert_transaction cost, t.transaction.amount.to_f, type
+      @db.insert_transaction cost, t.transaction.amount.to_f.abs, type
     end
   end
 end
