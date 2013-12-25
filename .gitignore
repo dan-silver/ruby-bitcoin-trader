@@ -1,0 +1,4 @@
+*.db
+coinbase-ruby/
+main.rb
+Gemfile.lock
