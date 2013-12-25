@@ -20,6 +20,18 @@ class DatabaseHandler
     end
   end
 
+  def total_profit
+    sum = 0
+    @db.execute( "select * from transactions" ) do |row|
+      if row[2] == "purchase"
+        sum -= row[0]
+      else
+        sum += row[0]
+      end
+    end
+    sum
+  end
+
   def insert_transaction (price, quantity, type)
     @db.execute("INSERT INTO transactions (price, quantity, type, timestamp)
             VALUES (?, ?, ?, datetime('now', 'utc'))", [price, quantity, type.to_s])

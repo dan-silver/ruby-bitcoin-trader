@@ -1,5 +1,6 @@
 require 'colorize'
 require 'coinbase'
+require 'libnotify'
 load 'db.rb'
 
 class Trader
@@ -33,7 +34,7 @@ class Trader
       #switch between purchasing and selling
       @db.last_transaction[:type] == :purchase ? consider_sale : consider_purchase
       puts "\n", "*".light_cyan*70, "\n"
-      sleep 60
+      sleep 30
     end
   end
 
@@ -61,6 +62,7 @@ class Trader
     puts "SELLING!".green
     puts @coinbase.sell! bitcoin_balance
     @db.insert_transaction @sell_price, bitcoin_balance, :sale
+    Libnotify.show(:body => "#{bitcoin_balance.btc_round} BTC were just sold for $#{@sell_price.usd_round}", :summary => "Bitcoins were sold!", :timeout => 2)
   end
 
   def consider_purchase
@@ -89,6 +91,7 @@ class Trader
     puts "BUYING!".green
     puts @coinbase.buy! btc
     @db.insert_transaction cost, btc, :purchase
+    Libnotify.show(:body => "#{btc.btc_round} BTC were just purchased for $#{cost.usd_round}", :summary => "Bitcoins were purchased!", :timeout => 2)
   end
 
   def pull_transactions_from_coinbase
