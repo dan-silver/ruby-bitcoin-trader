@@ -23,11 +23,7 @@ class DatabaseHandler
   def total_profit
     sum = 0
     @db.execute( "select * from transactions" ) do |row|
-      if row[2] == "purchase"
-        sum -= row[0]
-      else
-        sum += row[0]
-      end
+      sum += row[2] == "purchase" ? -row[0] : row[0]
     end
     sum
   end

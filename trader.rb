@@ -4,7 +4,7 @@ require 'libnotify'
 load 'db.rb'
 
 class Trader
-  def initialize (min_percent_gain_for_sale = 0.01, min_percent_drop_for_purchase = 0.01)
+  def initialize (min_percent_gain_for_sale = 0.015, min_percent_drop_for_purchase = 0.02, force_purchase = 0.02)
     I18n.enforce_available_locales = false
 
     @db = DatabaseHandler.new
@@ -12,11 +12,15 @@ class Trader
 
     @values = []
 
+    @refresh_interval = 25
+
     @coinbase_flat_fee = 0.15
     @coinbase_percentage_fee = 0.01
 
     @min_percent_gain = min_percent_gain_for_sale
     @min_percent_drop = min_percent_drop_for_purchase
+
+    @force_purchase_drop_percent = force_purchase
   end
 
   def addPrice(price)
@@ -34,7 +38,7 @@ class Trader
       #switch between purchasing and selling
       @db.last_transaction[:type] == :purchase ? consider_sale : consider_purchase
       puts "\n", "*".light_cyan*70, "\n"
-      sleep 30
+      sleep @refresh_interval
     end
   end
 
@@ -46,10 +50,13 @@ class Trader
     last_purchase = @db.last_transaction "purchase"
     @sell_price = @coinbase.sell_price(bitcoin_balance).to_f
     puts "\nLast purchase was #{last_purchase[:quantity].btc_round} BTC for $#{last_purchase[:price].usd_round}".light_green
-    puts "Can sell #{bitcoin_balance.btc_round} BTC for $#{@sell_price.usd_round}".light_blue
+
     #calculate sale profit
     profit = @sell_price - last_purchase[:price]
     min_profit = last_purchase[:price] * @min_percent_gain
+    target_sale_price = min_profit + last_purchase[:price]
+
+    puts "Can sell #{bitcoin_balance.btc_round} BTC for $#{@sell_price.usd_round} (target is $#{target_sale_price.usd_round})".light_blue
     if profit >= min_profit
       puts "Profit $#{profit.usd_round} >= $#{min_profit.usd_round}".green
       sell
@@ -68,7 +75,8 @@ class Trader
   def consider_purchase
     last_sale = @db.last_transaction "sale"
     buy_price = @one_btc_price_with_fee
-    one_btc_price = (buy_price.to_f - @coinbase_flat_fee) / @coinbase_percentage_fee
+    one_btc_price = (buy_price.to_f - @coinbase_flat_fee) / (@coinbase_percentage_fee * 100)
+    puts "the price of 1 btc is... $#{one_btc_price.usd_round}".light_green
     available_funds = last_sale[:price].to_f
 
     average = @values.inject{ |sum, el| sum + el }.to_f / @values.size
@@ -76,13 +84,21 @@ class Trader
     percent_change = (@one_btc_price_with_fee - @max) / @max
     puts "percent_change: #{(percent_change*100).round 4}%"
 
-    btc_to_purchase = ((available_funds - @coinbase_flat_fee) / @coinbase_percentage_fee) / one_btc_price
+    btc_to_purchase = ((available_funds - @coinbase_flat_fee) / @coinbase_percentage_fee) / one_btc_price / 100
 
-    puts "Last sale was #{last_sale[:quantity].btc_round} BTC for $#{last_sale[:price].usd_round}".light_green
+    one_btc_price_at_last_sale = (last_sale[:price] + 0.15) / (0.99 * last_sale[:quantity])
+
+    puts "Last sale was #{last_sale[:quantity].btc_round} BTC for $#{last_sale[:price].usd_round} at $#{one_btc_price_at_last_sale.usd_round} per BTC".light_green
 
     puts "Can buy #{btc_to_purchase.btc_round} BTC for $#{available_funds.usd_round}".blue
 
-    if percent_change <= -@min_percent_drop
+    puts "one_btc_price: $#{one_btc_price.usd_round} one_btc_price_at_last_sale: $#{one_btc_price_at_last_sale.btc_round}"
+    btc_drop_price_last_transaction = (one_btc_price - one_btc_price_at_last_sale) / one_btc_price_at_last_sale * 100
+
+
+    puts "The price of one btc has changed #{btc_drop_price_last_transaction.round 2}% since the last sale"
+
+    if percent_change <= -@min_percent_drop or btc_drop_price_last_transaction < @force_purchase_drop_percent * -100
       purchase btc_to_purchase, available_funds
     end
   end
@@ -96,10 +112,11 @@ class Trader
 
   def pull_transactions_from_coinbase
     @db.clear_database
-    @coinbase.transactions.transactions.each do |t|
+    @coinbase.transactions.transactions.reverse.each do |t|
       type = t.transaction.recipient.email == "das2c3@mail.missouri.edu" ? :purchase : :sale
       cost = /\$(?<amount>\d+\.*\d*)/.match(t.transaction.notes)[:amount].to_f
       @db.insert_transaction cost, t.transaction.amount.to_f.abs, type
+      sleep 0.5
     end
   end
 end
