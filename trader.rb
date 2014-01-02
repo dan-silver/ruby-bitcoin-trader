@@ -4,11 +4,14 @@ require 'libnotify'
 load 'db.rb'
 
 class Trader
-  def initialize (min_percent_gain_for_sale = 0.015, min_percent_drop_for_purchase = 0.02, force_purchase = 0.02)
+  def initialize (options)
+    @min_percent_gain = options[:percent_gain_for_sale]
+    @min_percent_drop = options[:percent_drop_for_purchase]
+    @force_purchase_drop_percent = options[:force_purchase_drop_percent]
     I18n.enforce_available_locales = false
 
-    @db = DatabaseHandler.new
     @coinbase = Coinbase::Client.new ENV['COINBASE_API_KEY']
+    @db = DatabaseHandler.new
 
     @values = []
 
@@ -16,11 +19,6 @@ class Trader
 
     @coinbase_flat_fee = 0.15
     @coinbase_percentage_fee = 0.01
-
-    @min_percent_gain = min_percent_gain_for_sale
-    @min_percent_drop = min_percent_drop_for_purchase
-
-    @force_purchase_drop_percent = force_purchase
   end
 
   def addPrice(price)
@@ -76,7 +74,7 @@ class Trader
     last_sale = @db.last_transaction "sale"
     buy_price = @one_btc_price_with_fee
     one_btc_price = (buy_price.to_f - @coinbase_flat_fee) / (@coinbase_percentage_fee * 100)
-    puts "the price of 1 btc is... $#{one_btc_price.usd_round}".light_green
+    #puts "the price of 1 btc is... $#{one_btc_price.usd_round}".light_green
     available_funds = last_sale[:price].to_f
 
     average = @values.inject{ |sum, el| sum + el }.to_f / @values.size
@@ -94,7 +92,6 @@ class Trader
 
     puts "one_btc_price: $#{one_btc_price.usd_round} one_btc_price_at_last_sale: $#{one_btc_price_at_last_sale.btc_round}"
     btc_drop_price_last_transaction = (one_btc_price - one_btc_price_at_last_sale) / one_btc_price_at_last_sale * 100
-
 
     puts "The price of one btc has changed #{btc_drop_price_last_transaction.round 2}% since the last sale"
 
